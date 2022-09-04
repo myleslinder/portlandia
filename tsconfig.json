@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "types": ["node", "chrome"],
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitThis": true,
+    "useDefineForClassFields": true,
+    "strict": true,
+    "skipLibCheck": false,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["packages/*"]
+    },
+    "composite": true
+  },
+  "exclude": ["node_modules"]
+}
