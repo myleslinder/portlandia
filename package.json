@@ -1,7 +1,7 @@
 {
-  "name": "chrome-messaging",
-  "version": "1.0.0",
-  "description": "",
+  "name": "react-chrome-connect",
+  "version": "0.0.1",
+  "description": "Create hooks for connecting to a Chrome messaging port in React",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsup",
