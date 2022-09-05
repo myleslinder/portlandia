@@ -6,7 +6,9 @@
     "types": ["node", "chrome"],
     "outDir": "dist",
     "esModuleInterop": true,
+    "jsx": "react-jsx",
     "forceConsistentCasingInFileNames": true,
+    "declaration": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitAny": true,
@@ -18,9 +20,8 @@
     "skipLibCheck": false,
     "baseUrl": ".",
     "paths": {
-      "~/*": ["packages/*"]
-    },
-    "composite": true
+      "~/*": ["src/*"]
+    }
   },
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "dist"]
 }

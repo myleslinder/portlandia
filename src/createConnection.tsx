@@ -1,16 +1,13 @@
-import { doesFunctionalityExist } from "@core";
 import {
   createContext,
-  ReactNode,
   useCallback,
   useContext,
   useEffect,
   useId,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
-import { useBeforeUnload } from "~/react/src/useBeforeUnload";
-import { postMessageNoOp, useLayoutEffectOverride } from "~/react/src/utils";
 import type {
   ChromeMessagingCtx,
   ChromeMessagingListener,
@@ -21,9 +18,15 @@ import type {
   PortMessageListener,
   PortStatus,
   PostMessageFn,
-} from "~/react/types";
+} from "~/types";
+import { useBeforeUnload } from "~/useBeforeUnload";
+import {
+  doesFunctionalityExist,
+  postMessageNoOp,
+  useLayoutEffectOverride,
+} from "~/utils";
 
-function createConnection<I, O>({
+function createPortConnection<I, O>({
   channelName,
   extensionId,
   includeTlsChannelId,
@@ -41,7 +44,7 @@ function createConnection<I, O>({
 
   const MessagingContext = createContext<ChromeMessagingCtx<O>>(baseCtx);
 
-  function useEstablishConnection(listener?: ChromeMessagingListener<I>) {
+  function usePort(listener?: ChromeMessagingListener<I>) {
     const [portStatus, setPortStatus] = useState<PortStatus>("idle");
     const [error, setError] = useState<PortErrorMessage>(null);
     const portRef = useRef<Port | null>(null);
@@ -85,20 +88,13 @@ function createConnection<I, O>({
       postMessageFnRef.current = postMessageNoOp;
     }, []);
 
-    const cleanup = useCallback(
-      (port?: Port | null) => {
-        if (port) {
-          setPortStatus("closed");
-          port.onMessage.removeListener(messageListener);
-          port.onDisconnect.removeListener(disconnectListener);
-          port.disconnect();
-        }
-      },
-      [messageListener, disconnectListener]
-    );
-
     useBeforeUnload(() => {
-      cleanup(portRef.current);
+      if (portRef.current) {
+        setPortStatus("closed");
+        portRef.current.onMessage.removeListener(messageListener);
+        portRef.current.onDisconnect.removeListener(disconnectListener);
+        portRef.current.disconnect();
+      }
     });
 
     useEffect(() => {
@@ -163,9 +159,11 @@ function createConnection<I, O>({
     }: {
       children: ReactNode | undefined;
     }) {
-      <MessagingContext.Provider value={ctx}>
-        {children}
-      </MessagingContext.Provider>;
+      return (
+        <MessagingContext.Provider value={ctx}>
+          {children}
+        </MessagingContext.Provider>
+      );
     }
 
     return {
@@ -174,7 +172,7 @@ function createConnection<I, O>({
     };
   }
 
-  function useConnection(listener?: ChromeMessagingListener<I>) {
+  function usePortConnection(listener?: ChromeMessagingListener<I>) {
     const listenerId = useId();
     const connectionCtx = useContext(MessagingContext);
 
@@ -195,10 +193,10 @@ function createConnection<I, O>({
   }
 
   return {
-    useEstablishConnection,
-    useConnection,
+    usePort,
+    usePortConnection,
   };
 }
 
 export type { ChromeMessagingListener, ConnectionOptions };
-export { createConnection };
+export { createPortConnection };
