@@ -1,4 +1,4 @@
-# ⚛ React Chrome Connect &nbsp;![](https://img.shields.io/npm/v/tailwindcss-cmdk.svg)
+# ⚛ React Chrome Connect &nbsp;![](https://img.shields.io/npm/v/react-chrome-connect.svg)
 
 - For [Manifest V3](https://developer.chrome.com/docs/extensions/mv3/intro/mv3-overview/)
 - See [message passing long lived connections](https://developer.chrome.com/docs/extensions/mv3/messaging/#connect)
