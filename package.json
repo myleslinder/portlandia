@@ -10,6 +10,11 @@
     "typecheck": "tsc -b",
     "preversion": "pnpm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/myleslinder/react-chrome-connect"
+  },
+  "homepage": "https://github.com/myleslinder/react-chrome-connect",
   "tsup": {
     "entry": [
       "src/index.ts"
