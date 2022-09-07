@@ -182,7 +182,7 @@ function createPortConnection<I, O>({
   function usePortListener(listener?: ChromeMessagingListener<I>) {
     const listenerId = useId();
     useLayoutEffectOverride(() => {
-      if (rootPortError) {
+      if (!port || rootPortError) {
         return;
       }
       if (listener) {
@@ -200,7 +200,7 @@ function createPortConnection<I, O>({
     const connectionCtx = useContext(MessagingContext);
 
     useLayoutEffectOverride(() => {
-      if (rootPortError) {
+      if (!port || rootPortError) {
         return;
       }
       if (listener) {
