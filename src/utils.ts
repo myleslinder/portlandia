@@ -27,6 +27,21 @@ function postMessageNoOp<O>(_msg: O): void {
   return undefined;
 }
 
+// class LoopGaurd {
+//   #counter = 0;
+//   constructor(public max: number = 100) {}
+
+//   test(value) {
+//     this.#counter++;
+//     if (this.#counter > this.max) {
+//       throw new Error(`LoopGuard exceeded max of ${this.max}`);
+//     }
+//     return value;
+//   }
+// }
+
+// const guard = (value) => new LoopGaurd().test(value);
+
 export {
   canUseDOM,
   useLayoutEffectOverride,
