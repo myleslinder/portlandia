@@ -12,7 +12,6 @@ import type {
   ChromeMessagingCtx,
   ChromeMessagingListener,
   ConnectionOptions,
-  Port,
   PortDisconnectListener,
   PortErrorMessage,
   PortMessageListener,
@@ -21,6 +20,7 @@ import type {
 } from "~/types";
 import { useBeforeUnload } from "~/useBeforeUnload";
 import {
+  canUseDOM,
   doesFunctionalityExist,
   postMessageNoOp,
   useLayoutEffectOverride,
@@ -36,129 +36,148 @@ function createPortConnection<I, O>({
     root: () => undefined,
   };
 
+  const messageListener: PortMessageListener = (message, _port) => {
+    if (debug) {
+      console.log("calling port listeners with ", message);
+    }
+    Object.values(listenerMap).forEach((listener) => {
+      listener.call(null, message);
+    });
+  };
+  let port: chrome.runtime.Port | null = null;
+
+  if (canUseDOM && doesFunctionalityExist) {
+    port = chrome.runtime.connect(extensionId, {
+      name: channelName,
+      includeTlsChannelId,
+    });
+
+    port.onMessage.addListener(messageListener);
+
+    window.addEventListener("beforeunload", () => {
+      if (port) {
+        port.onMessage.removeListener(messageListener);
+        port.disconnect();
+      }
+    });
+  } else {
+    if (debug) {
+      console.log("No connection to establish");
+    }
+  }
+
   const MessagingContext = createContext<ChromeMessagingCtx<O> | null>(null);
 
-  function usePort(listener?: ChromeMessagingListener<I>) {
-    return function PortConnectionProvider({
-      children,
-    }: {
-      children: ReactNode | undefined;
-    }) {
-      const [portStatus, setPortStatus] = useState<PortStatus>("idle");
-      const [error, setError] = useState<PortErrorMessage>(null);
-      const portRef = useRef<Port | null>(null);
-      const postMessageFnRef = useRef<PostMessageFn<O>>(postMessageNoOp);
+  return {
+    PortConnectionProvider,
+    usePortConnection,
+    usePortListener,
+  };
 
-      useLayoutEffectOverride(() => {
+  function PortConnectionProvider({
+    children,
+  }: {
+    children: ReactNode | undefined;
+  }) {
+    const [portStatus, setPortStatus] = useState<PortStatus>("idle");
+    const [error, setError] = useState<PortErrorMessage>(null);
+    const postMessageFnRef = useRef<PostMessageFn<O>>(postMessageNoOp);
+
+    const disconnectListener = useCallback<PortDisconnectListener>((port) => {
+      if (debug) {
+        console.log("disconnecting: ", port.name);
+      }
+      if (chrome.runtime.lastError) {
         if (debug) {
-          console.log("updating root listener");
+          console.error(
+            "disconnecting because of error: ",
+            chrome.runtime.lastError.message
+          );
         }
-        if (listener) {
-          listenerMap["root"] = listener;
-        }
-      }, [listener]);
+        setError(chrome.runtime.lastError.message ?? null);
+      }
+      setPortStatus("closed");
+      postMessageFnRef.current = postMessageNoOp;
+    }, []);
 
-      const messageListener = useCallback<PortMessageListener>(
-        (message, _port) => {
-          if (debug) {
-            console.log("calling port listeners with ", message);
-          }
-          Object.values(listenerMap).forEach((listener) => {
-            listener.call(null, message);
-          });
-        },
-        []
-      );
+    const unloadCb = useCallback(() => {
+      if (port) {
+        port.onDisconnect.removeListener(disconnectListener);
+      }
+    }, [disconnectListener]);
 
-      const disconnectListener = useCallback<PortDisconnectListener>((port) => {
-        if (debug) {
-          console.log("disconnecting: ", port.name);
-        }
-        if (chrome.runtime.lastError) {
-          if (debug) {
-            console.error(
-              "disconnecting because of error: ",
-              chrome.runtime.lastError.message
-            );
-          }
-          setError(chrome.runtime.lastError.message ?? null);
-        }
-        setPortStatus("closed");
-        postMessageFnRef.current = postMessageNoOp;
-      }, []);
+    useBeforeUnload(unloadCb);
 
-      useBeforeUnload(() => {
-        if (portRef.current) {
-          setPortStatus("closed");
-          portRef.current.onMessage.removeListener(messageListener);
-          portRef.current.onDisconnect.removeListener(disconnectListener);
-          portRef.current.disconnect();
-        }
-      });
+    useEffect(() => {
+      if (debug) {
+        console.log("re-running port creation/check");
+      }
+      try {
+        if (port) {
+          postMessageFnRef.current = port.postMessage.bind(port);
 
-      useEffect(() => {
-        if (debug) {
-          console.log("re-running port creation/check");
-        }
-        try {
-          if (doesFunctionalityExist()) {
-            const port = chrome.runtime.connect(extensionId, {
-              name: channelName,
-              includeTlsChannelId,
-            });
-            portRef.current = port;
-            postMessageFnRef.current = port.postMessage.bind(port);
-            port.onMessage.addListener(messageListener);
-            port.onDisconnect.addListener(disconnectListener);
-            setPortStatus("open");
-            return () => {
-              if (debug) {
-                console.log("cleaning up port creation/check");
-              }
-              setPortStatus("closed");
-              port.onMessage.removeListener(messageListener);
+          port.onDisconnect.addListener(disconnectListener);
+          setPortStatus("open");
+          return () => {
+            if (debug) {
+              console.log("cleaning up port creation/check");
+            }
+            if (port) {
               port.onDisconnect.removeListener(disconnectListener);
-              port.disconnect();
-              portRef.current = null;
-            };
-          }
-        } catch (e) {
-          console.error("error establishing connection to extension", e);
-          setPortStatus("closed");
-          if (e instanceof Error) {
-            setError(e.message);
-          }
+            }
+
+            setPortStatus("closed");
+          };
         }
-      }, [messageListener, disconnectListener]);
+      } catch (e) {
+        console.error("error establishing connection to extension", e);
+        setPortStatus("closed");
+        if (e instanceof Error) {
+          setError(e.message);
+        }
+      }
+    }, [disconnectListener]);
 
-      const safePostMessage = useCallback<PostMessageFn<O>>(
-        (m) => {
-          if (portStatus === "open") {
-            postMessageFnRef.current(m);
-            return;
-          }
-          if (debug) {
-            console.log(
-              "called post message with no open port, port status: ",
-              portStatus
-            );
-          }
-        },
-        [portStatus]
-      );
+    const safePostMessage = useCallback<PostMessageFn<O>>(
+      (m) => {
+        if (portStatus === "open") {
+          postMessageFnRef.current(m);
+          return;
+        }
+        if (debug) {
+          console.log(
+            "called post message with no open port, port status: ",
+            portStatus
+          );
+        }
+      },
+      [portStatus]
+    );
 
-      return (
-        <MessagingContext.Provider
-          value={{
-            postMessage: safePostMessage,
-            status: portStatus,
-            error,
-          }}
-        >
-          {children}
-        </MessagingContext.Provider>
-      );
-    };
+    return (
+      <MessagingContext.Provider
+        value={{
+          postMessage: safePostMessage,
+          status: portStatus,
+          error,
+        }}
+      >
+        {children}
+      </MessagingContext.Provider>
+    );
+  }
+
+  function usePortListener(listener?: ChromeMessagingListener<I>) {
+    const listenerId = useId();
+    useLayoutEffectOverride(() => {
+      if (listener) {
+        if (debug) {
+          console.log("attaching listener with id: ", listenerId);
+        }
+        listenerMap[listenerId] = listener;
+      }
+    }, [listener]);
+    return doesFunctionalityExist;
   }
 
   function usePortConnection(listener?: ChromeMessagingListener<I>) {
@@ -182,11 +201,6 @@ function createPortConnection<I, O>({
 
     return connectionCtx;
   }
-
-  return {
-    usePort,
-    usePortConnection,
-  };
 }
 
 export { doesFunctionalityExist } from "./utils";
