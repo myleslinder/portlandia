@@ -7,7 +7,7 @@ import { useLayoutEffect } from "react";
  * (https://developer.chrome.com/docs/extensions/mv3/manifest/externally_connectable/)
  *
  */
-const doesFunctionalityExist =
+const doesFunctionalityExist = () =>
   (typeof chrome as unknown) !== undefined &&
   chrome.runtime &&
   chrome.runtime.connect;

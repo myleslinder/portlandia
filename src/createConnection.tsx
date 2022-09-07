@@ -35,6 +35,7 @@ function createPortConnection<I, O>({
   const listenerMap: { [id: string]: ChromeMessagingListener<I> } = {
     root: () => undefined,
   };
+  let rootPortError: string | undefined;
 
   const messageListener: PortMessageListener = (message, _port) => {
     if (debug) {
@@ -44,18 +45,24 @@ function createPortConnection<I, O>({
       listener.call(null, message);
     });
   };
+
+  const mainDisconnectListener: PortDisconnectListener = () => {
+    if (chrome.runtime.lastError) {
+      rootPortError = chrome.runtime.lastError.message;
+    }
+  };
   let port: chrome.runtime.Port | null = null;
 
-  if (canUseDOM && doesFunctionalityExist) {
+  if (canUseDOM && doesFunctionalityExist()) {
     port = chrome.runtime.connect(extensionId, {
       name: channelName,
       includeTlsChannelId,
     });
-
     port.onMessage.addListener(messageListener);
+    port.onDisconnect.addListener(mainDisconnectListener);
 
     window.addEventListener("beforeunload", () => {
-      if (port) {
+      if (port && !rootPortError) {
         port.onMessage.removeListener(messageListener);
         port.disconnect();
       }
@@ -80,7 +87,7 @@ function createPortConnection<I, O>({
     children: ReactNode | undefined;
   }) {
     const [portStatus, setPortStatus] = useState<PortStatus>("idle");
-    const [error, setError] = useState<PortErrorMessage>(null);
+    const [error, setError] = useState<PortErrorMessage>(rootPortError ?? null);
     const postMessageFnRef = useRef<PostMessageFn<O>>(postMessageNoOp);
 
     const disconnectListener = useCallback<PortDisconnectListener>((port) => {
@@ -94,7 +101,9 @@ function createPortConnection<I, O>({
             chrome.runtime.lastError.message
           );
         }
-        setError(chrome.runtime.lastError.message ?? null);
+        setError(
+          chrome.runtime.lastError.message ?? "An unknown error occurred"
+        );
       }
       setPortStatus("closed");
       postMessageFnRef.current = postMessageNoOp;
@@ -111,6 +120,9 @@ function createPortConnection<I, O>({
     useEffect(() => {
       if (debug) {
         console.log("re-running port creation/check");
+      }
+      if (rootPortError) {
+        return;
       }
       try {
         if (port) {
@@ -170,6 +182,9 @@ function createPortConnection<I, O>({
   function usePortListener(listener?: ChromeMessagingListener<I>) {
     const listenerId = useId();
     useLayoutEffectOverride(() => {
+      if (rootPortError) {
+        return;
+      }
       if (listener) {
         if (debug) {
           console.log("attaching listener with id: ", listenerId);
@@ -185,6 +200,9 @@ function createPortConnection<I, O>({
     const connectionCtx = useContext(MessagingContext);
 
     useLayoutEffectOverride(() => {
+      if (rootPortError) {
+        return;
+      }
       if (listener) {
         if (debug) {
           console.log("attaching listener with id: ", listenerId);
