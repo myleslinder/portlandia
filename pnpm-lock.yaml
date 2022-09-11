@@ -11,8 +11,12 @@ importers:
       eslint: ^8.5.0
       prettier: 2.7.1
       react: ^18.2.0
+      react-dom: ^18.2.0
       tsup: ^6.2.3
       typescript: ^4.8.2
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
     devDependencies:
       '@myleslinder/prettier-config': 0.0.1
       '@types/chrome': 0.0.196
@@ -20,7 +24,6 @@ importers:
       '@types/react': 18.0.18
       eslint: 8.23.0
       prettier: 2.7.1
-      react: 18.2.0
       tsup: 6.2.3_typescript@4.8.2
       typescript: 4.8.2
 
@@ -1662,6 +1665,7 @@ packages:
     engines: {node: '>=0.10.0'}
     dependencies:
       loose-envify: 1.4.0
+    dev: false
 
   /readdirp/3.6.0:
     resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
