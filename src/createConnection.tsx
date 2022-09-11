@@ -30,8 +30,19 @@ function createPortConnection<I, O>({
   channelName,
   extensionId,
   includeTlsChannelId,
+  validator = (m: unknown): m is I => !!m,
   debug = false,
-}: ConnectionOptions) {
+}: ConnectionOptions<I>): {
+  usePortListener: () => boolean;
+  usePortConnection: (
+    listener?: ChromeMessagingListener<I> | undefined
+  ) => ChromeMessagingCtx<O>;
+  PortConnectionProvider: ({
+    children,
+  }: {
+    children: ReactNode;
+  }) => JSX.Element;
+} {
   const listenerMap: { [id: string]: ChromeMessagingListener<I> } = {
     root: () => undefined,
   };
@@ -42,7 +53,9 @@ function createPortConnection<I, O>({
       console.log("calling port listeners with ", message);
     }
     Object.values(listenerMap).forEach((listener) => {
-      listener.call(null, message);
+      if (validator(message)) {
+        listener.call(null, message);
+      }
     });
   };
 
@@ -179,7 +192,7 @@ function createPortConnection<I, O>({
     );
   }
 
-  function usePortListener(listener?: ChromeMessagingListener<I>) {
+  function usePortListener(listener?: ChromeMessagingListener<I>): boolean {
     const listenerId = useId();
     useLayoutEffectOverride(() => {
       if (!port || rootPortError) {
@@ -192,7 +205,7 @@ function createPortConnection<I, O>({
         listenerMap[listenerId] = listener;
       }
     }, [listener]);
-    return doesFunctionalityExist;
+    return doesFunctionalityExist();
   }
 
   function usePortConnection(listener?: ChromeMessagingListener<I>) {
