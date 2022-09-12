@@ -33,7 +33,7 @@ function createPortConnection<I, O>({
 	validator = (m: unknown): m is I => !!m,
 	debug = false,
 }: ConnectionOptions<I>): {
-	usePortListener: () => boolean;
+	usePortListener: () => void;
 	usePortConnection: (
 		listener?: ChromeMessagingListener<I> | undefined,
 	) => ChromeMessagingCtx<O>;
@@ -192,7 +192,7 @@ function createPortConnection<I, O>({
 		);
 	}
 
-	function usePortListener(listener?: ChromeMessagingListener<I>): boolean {
+	function usePortListener(listener?: ChromeMessagingListener<I>) {
 		const listenerId = useId();
 		useLayoutEffectOverride(() => {
 			if (!port || rootPortError) {
@@ -205,7 +205,7 @@ function createPortConnection<I, O>({
 				listenerMap[listenerId] = listener;
 			}
 		}, [listener]);
-		return doesFunctionalityExist();
+		return;
 	}
 
 	function usePortConnection(listener?: ChromeMessagingListener<I>) {
