@@ -33,7 +33,7 @@ function createPortConnection<I, O>({
 	validator = (m: unknown): m is I => !!m,
 	debug = false,
 }: ConnectionOptions<I>): {
-	usePortListener: () => void;
+	usePortListener: (listener: ChromeMessagingListener<I>) => void;
 	usePortConnection: (
 		listener?: ChromeMessagingListener<I> | undefined,
 	) => ChromeMessagingCtx<O>;
