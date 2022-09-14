@@ -26,7 +26,8 @@
 		"format": "prettier --write .",
 		"lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
 		"typecheck": "tsc -b",
-		"prepublish": "pnpm run build"
+		"prepublish": "pnpm run build",
+		"update:check": "pnpm dlx taze"
 	},
 	"tsup": {
 		"entry": [

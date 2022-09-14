@@ -5,7 +5,6 @@ type PortDisconnectListener = Parameters<
 	Port["onDisconnect"]["addListener"]
 >[0];
 type PortStatus = "idle" | "open" | "closed";
-type PortErrorMessage = string | null;
 
 type PostMessageFn<O> = (msg: O) => void;
 
@@ -13,7 +12,7 @@ type PostMessageFn<O> = (msg: O) => void;
 type ChromeMessagingCtx<O = any> = {
 	postMessage: PostMessageFn<O>;
 	status: PortStatus;
-	error: PortErrorMessage;
+	error: Error | null;
 };
 
 // TODO: add a keep alive option?
@@ -28,7 +27,6 @@ type ConnectionOptions<T> = {
 export type {
 	ChromeMessagingCtx,
 	PortStatus,
-	PortErrorMessage,
 	PostMessageFn,
 	ChromeMessagingListener,
 	PortMessageListener,

@@ -4,6 +4,7 @@ import {
 	useContext,
 	useEffect,
 	useId,
+	useLayoutEffect,
 	useRef,
 	useState,
 	type ReactNode,
@@ -13,18 +14,53 @@ import type {
 	ChromeMessagingListener,
 	ConnectionOptions,
 	PortDisconnectListener,
-	PortErrorMessage,
 	PortMessageListener,
 	PortStatus,
 	PostMessageFn,
 } from "~/types";
-import { useBeforeUnload } from "~/useBeforeUnload";
-import {
-	canUseDOM,
-	doesFunctionalityExist,
-	postMessageNoOp,
-	useLayoutEffectOverride,
-} from "~/utils";
+
+/**
+ * `chrome` will only have a value if the `externally_connectable` manifest property
+ *  contains a match for the url we're running on:
+ * [externally_connectable - Chrome Developers]
+ * (https://developer.chrome.com/docs/extensions/mv3/manifest/externally_connectable/)
+ *
+ */
+const doesFunctionalityExist: () => boolean = () =>
+	(typeof chrome as unknown) !== undefined &&
+	chrome.runtime &&
+	typeof chrome.runtime.connect === "function"
+		? true
+		: false;
+
+const canUseDOM = !!(
+	typeof window !== "undefined" &&
+	window.document &&
+	window.document.createElement
+);
+
+const useIsomorphicEffect = canUseDOM ? useLayoutEffect : useEffect;
+
+function useBeforeUnload(callback: () => unknown): void {
+	useEffect(() => {
+		window.addEventListener("beforeunload", callback);
+		return () => {
+			window.removeEventListener("beforeunload", callback);
+		};
+	}, [callback]);
+}
+
+function postMessageNoOp<O>(_msg: O): void {
+	return undefined;
+}
+
+type PortHooksWithProvider<I, O> = {
+	usePortListener: (listener: ChromeMessagingListener<I>) => void;
+	usePortConnection: (
+		listener?: ChromeMessagingListener<I> | undefined,
+	) => ChromeMessagingCtx<O>;
+	PortConnectionProvider: React.FC<{ children: ReactNode }>;
+};
 
 function createPortConnection<I, O>({
 	channelName,
@@ -32,37 +68,31 @@ function createPortConnection<I, O>({
 	includeTlsChannelId,
 	validator = (m: unknown): m is I => !!m,
 	debug = false,
-}: ConnectionOptions<I>): {
-	usePortListener: (listener: ChromeMessagingListener<I>) => void;
-	usePortConnection: (
-		listener?: ChromeMessagingListener<I> | undefined,
-	) => ChromeMessagingCtx<O>;
-	PortConnectionProvider: ({
-		children,
-	}: {
-		children: ReactNode;
-	}) => JSX.Element;
-} {
-	const listenerMap: { [id: string]: ChromeMessagingListener<I> } = {
-		root: () => undefined,
-	};
-	let rootPortError: string | undefined;
+}: ConnectionOptions<I>): PortHooksWithProvider<I, O> {
+	const listenerMap: Map<string, ChromeMessagingListener<I>> = new Map();
+	let _cachedMessage: I | null = null;
+
+	let rootPortError: Error | undefined;
 	let port: chrome.runtime.Port | null = null;
 
 	const messageListener: PortMessageListener = (message, _port) => {
 		if (debug) {
 			console.log("calling port listeners with ", message);
 		}
-		Object.values(listenerMap).forEach((listener) => {
-			if (validator(message)) {
+
+		if (validator(message)) {
+			const listeners = Array.from(listenerMap.values());
+			_cachedMessage = message;
+
+			listeners.forEach((listener) => {
 				listener.call(null, message);
-			}
-		});
+			});
+		}
 	};
 
 	const mainDisconnectListener: PortDisconnectListener = () => {
 		if (chrome.runtime.lastError) {
-			rootPortError = chrome.runtime.lastError.message;
+			rootPortError = new Error(chrome.runtime.lastError.message);
 		}
 	};
 
@@ -100,7 +130,7 @@ function createPortConnection<I, O>({
 		children: ReactNode | undefined;
 	}) {
 		const [portStatus, setPortStatus] = useState<PortStatus>("idle");
-		const [error, setError] = useState<PortErrorMessage>(rootPortError ?? null);
+		const [error, setError] = useState<Error | null>(rootPortError ?? null);
 		const postMessageFnRef = useRef<PostMessageFn<O>>(postMessageNoOp);
 
 		const disconnectListener = useCallback<PortDisconnectListener>((port) => {
@@ -115,7 +145,9 @@ function createPortConnection<I, O>({
 					);
 				}
 				setError(
-					chrome.runtime.lastError.message ?? "An unknown error occurred",
+					new Error(
+						chrome.runtime.lastError.message ?? "An unknown error occurred",
+					),
 				);
 			}
 			setPortStatus("closed");
@@ -155,10 +187,12 @@ function createPortConnection<I, O>({
 					};
 				}
 			} catch (e) {
-				console.error("error establishing connection to extension", e);
+				if (debug) {
+					console.error("error establishing connection to extension", e);
+				}
 				setPortStatus("closed");
 				if (e instanceof Error) {
-					setError(e.message);
+					setError(e);
 				}
 			}
 		}, [disconnectListener]);
@@ -178,23 +212,24 @@ function createPortConnection<I, O>({
 			},
 			[portStatus],
 		);
-
+		const ctx = {
+			postMessage: safePostMessage,
+			status: portStatus,
+			error,
+		};
 		return (
-			<MessagingContext.Provider
-				value={{
-					postMessage: safePostMessage,
-					status: portStatus,
-					error,
-				}}
-			>
+			<MessagingContext.Provider value={ctx}>
 				{children}
 			</MessagingContext.Provider>
 		);
 	}
 
-	function usePortListener(listener?: ChromeMessagingListener<I>) {
+	function usePortListener(
+		listener?: ChromeMessagingListener<I>,
+		flush?: boolean,
+	) {
 		const listenerId = useId();
-		useLayoutEffectOverride(() => {
+		useIsomorphicEffect(() => {
 			if (!port || rootPortError) {
 				return;
 			}
@@ -202,17 +237,32 @@ function createPortConnection<I, O>({
 				if (debug) {
 					console.log("attaching listener with id: ", listenerId);
 				}
-				listenerMap[listenerId] = listener;
+				if (flush && _cachedMessage && !listenerMap.has(listenerId)) {
+					Promise.resolve()
+						.then(() => {
+							if (_cachedMessage) {
+								listener(_cachedMessage);
+							}
+						})
+						.catch(console.error);
+				}
+				listenerMap.set(listenerId, listener);
 			}
-		}, [listener]);
+			return () => {
+				listenerMap.delete(listenerId);
+			};
+		}, [listener, listenerId]);
 		return;
 	}
 
-	function usePortConnection(listener?: ChromeMessagingListener<I>) {
+	function usePortConnection(
+		listener?: ChromeMessagingListener<I>,
+		flush?: boolean,
+	) {
 		const listenerId = useId();
 		const connectionCtx = useContext(MessagingContext);
 
-		useLayoutEffectOverride(() => {
+		useIsomorphicEffect(() => {
 			if (!port || rootPortError) {
 				return;
 			}
@@ -220,9 +270,21 @@ function createPortConnection<I, O>({
 				if (debug) {
 					console.log("attaching listener with id: ", listenerId);
 				}
-				listenerMap[listenerId] = listener;
+				if (flush && _cachedMessage && !listenerMap.has(listenerId)) {
+					Promise.resolve()
+						.then(() => {
+							if (_cachedMessage) {
+								listener(_cachedMessage);
+							}
+						})
+						.catch(console.error);
+				}
+				listenerMap.set(listenerId, listener);
+				return () => {
+					listenerMap.delete(listenerId);
+				};
 			}
-		}, [listener]);
+		}, [listener, listenerId]);
 
 		if (!connectionCtx) {
 			throw new Error(
@@ -234,6 +296,5 @@ function createPortConnection<I, O>({
 	}
 }
 
-export { doesFunctionalityExist } from "./utils";
 export type { ChromeMessagingListener, ConnectionOptions };
-export { createPortConnection };
+export { createPortConnection, doesFunctionalityExist };
