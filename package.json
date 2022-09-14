@@ -1,6 +1,6 @@
 {
 	"name": "react-chrome-connect",
-	"version": "0.0.36",
+	"version": "0.0.37",
 	"description": "Create hooks for connecting to a Chrome messaging port in React",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
@@ -31,7 +31,7 @@
 	},
 	"tsup": {
 		"entry": [
-			"src/index.ts"
+			"src/index.tsx"
 		],
 		"splitting": false,
 		"sourcemap": false,
