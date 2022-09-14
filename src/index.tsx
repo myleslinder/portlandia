@@ -55,9 +55,13 @@ function postMessageNoOp<O>(_msg: O): void {
 }
 
 type PortHooksWithProvider<I, O> = {
-	usePortListener: (listener: ChromeMessagingListener<I>) => void;
+	usePortListener: (
+		listener: ChromeMessagingListener<I>,
+		flush?: boolean,
+	) => void;
 	usePortConnection: (
 		listener?: ChromeMessagingListener<I> | undefined,
+		flush?: boolean,
 	) => ChromeMessagingCtx<O>;
 	PortConnectionProvider: React.FC<{ children: ReactNode }>;
 };
