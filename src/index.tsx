@@ -234,9 +234,6 @@ function createPortConnection<I, O>({
 	) {
 		const listenerId = useId();
 		useIsomorphicEffect(() => {
-			if (!port || rootPortError) {
-				return;
-			}
 			if (listener) {
 				if (debug) {
 					console.log("attaching listener with id: ", listenerId);
