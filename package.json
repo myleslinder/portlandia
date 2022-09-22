@@ -1,6 +1,6 @@
 {
-	"name": "react-chrome-connect",
-	"version": "0.0.38",
+	"name": "portlandia",
+	"version": "0.0.1",
 	"description": "Create hooks for connecting to a Chrome messaging port in React",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
