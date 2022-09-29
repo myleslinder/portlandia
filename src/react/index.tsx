@@ -100,25 +100,29 @@ function createPortConnection<I, O>({
 		}
 	};
 
-	if (canUseDOM && doesFunctionalityExist()) {
-		port = chrome.runtime.connect(extensionId, {
-			name: channelName,
-			includeTlsChannelId,
-		});
-		port.onMessage.addListener(messageListener);
-		port.onDisconnect.addListener(mainDisconnectListener);
+	const connect = () => {
+		if (canUseDOM && doesFunctionalityExist()) {
+			port = chrome.runtime.connect(extensionId, {
+				name: channelName,
+				includeTlsChannelId,
+			});
+			port.onMessage.addListener(messageListener);
+			port.onDisconnect.addListener(mainDisconnectListener);
 
-		window.addEventListener("beforeunload", () => {
-			if (port && !rootPortError) {
-				port.onMessage.removeListener(messageListener);
-				port.disconnect();
+			window.addEventListener("beforeunload", () => {
+				if (port && !rootPortError) {
+					port.onMessage.removeListener(messageListener);
+					port.disconnect();
+				}
+			});
+		} else {
+			if (debug) {
+				console.log("No connection to establish");
 			}
-		});
-	} else {
-		if (debug) {
-			console.log("No connection to establish");
 		}
-	}
+		return port;
+	};
+	connect();
 
 	const MessagingContext = createContext<ChromeMessagingCtx<O> | null>(null);
 
@@ -213,8 +217,19 @@ function createPortConnection<I, O>({
 						portStatus,
 					);
 				}
+				const newPort = connect();
+				if (newPort) {
+					postMessageFnRef.current = newPort.postMessage.bind(port);
+					newPort.onDisconnect.addListener(disconnectListener);
+					setPortStatus("open");
+					if (debug) {
+						console.log("successfully reopened port and sent message");
+					}
+					newPort.postMessage(m);
+					return;
+				}
 			},
-			[portStatus],
+			[portStatus, disconnectListener],
 		);
 		const ctx = {
 			postMessage: safePostMessage,
