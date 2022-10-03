@@ -174,7 +174,7 @@ function createPortConnection<I, O>({
 			if (debug) {
 				console.log("re-running port creation/check");
 			}
-			if (rootPortError) {
+			if (error) {
 				return;
 			}
 			try {
@@ -203,7 +203,26 @@ function createPortConnection<I, O>({
 					setError(e);
 				}
 			}
-		}, [disconnectListener]);
+		}, [disconnectListener, error]);
+
+		useEffect(() => {
+			if (portStatus === "closed" && !error) {
+				const newPort = connect();
+				if (newPort) {
+					postMessageFnRef.current = newPort.postMessage.bind(port);
+					newPort.onDisconnect.addListener(disconnectListener);
+					setPortStatus("open");
+					if (debug) {
+						console.log("successfully reopened port and sent message");
+					}
+					port = newPort;
+				} else {
+					if (debug) {
+						console.log("unable to open port continuation");
+					}
+				}
+			}
+		}, [portStatus, disconnectListener, error]);
 
 		const safePostMessage = useCallback<PostMessageFn<O>>(
 			(m) => {
@@ -217,19 +236,19 @@ function createPortConnection<I, O>({
 						portStatus,
 					);
 				}
-				const newPort = connect();
-				if (newPort) {
-					postMessageFnRef.current = newPort.postMessage.bind(port);
-					newPort.onDisconnect.addListener(disconnectListener);
-					setPortStatus("open");
-					if (debug) {
-						console.log("successfully reopened port and sent message");
-					}
-					newPort.postMessage(m);
-					return;
-				}
+				// const newPort = connect();
+				// if (newPort) {
+				// 	postMessageFnRef.current = newPort.postMessage.bind(port);
+				// 	newPort.onDisconnect.addListener(disconnectListener);
+				// 	setPortStatus("open");
+				// 	if (debug) {
+				// 		console.log("successfully reopened port and sent message");
+				// 	}
+				// 	newPort.postMessage(m);
+				// 	return;
+				// }
 			},
-			[portStatus, disconnectListener],
+			[portStatus],
 		);
 		const ctx = {
 			postMessage: safePostMessage,
