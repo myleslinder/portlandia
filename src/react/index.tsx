@@ -284,7 +284,7 @@ function createPortConnection<I, O>({
 				listenerMap.set(listenerId, listener);
 			}
 			return () => {
-				listenerMap.delete(listenerId);
+				listenerMap.set(listenerId, () => undefined);
 			};
 		}, [listener, listenerId]);
 		return;
@@ -316,7 +316,7 @@ function createPortConnection<I, O>({
 				}
 				listenerMap.set(listenerId, listener);
 				return () => {
-					listenerMap.delete(listenerId);
+					listenerMap.set(listenerId, () => undefined);
 				};
 			}
 		}, [listener, listenerId]);
